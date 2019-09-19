@@ -9,8 +9,11 @@ compilation:
 usage:
       ./fwatch [filename] [email_recipient]
 
-
+TODO:
+      fwatch should immediately spawn a process with a thread accepting socket connections
+      each time a connection is made, OD
 #endif
+
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -46,6 +49,8 @@ void fwatch(char* fn){
 void mail_file(char* fn, char* recp){
       char cmd[150] = "mail -s [AUTO_NOTE_UPDATE] ";
       stpcpy(stpcpy(stpcpy(cmd+strlen(cmd), recp), " < "), fn);
+      /* give some time for the FP to be closed */
+      usleep(10000);
       system(cmd);
 }
 
@@ -58,8 +63,8 @@ int main(int a, char** b){
             sprintf(dir+strlen(dir), "/");
             strcpy(dir+strlen(dir), b[1]);
       }
+      printf("keeping an eye on file: %s\n", dir_p);
       if(fork() != 0)return 0;
-      printf("keeping an eye on file: %s\nto stop, enter kill -9 %i\n", dir_p, getpid());
       while(1){
             fwatch(dir_p);
             mail_file(dir_p, b[2]);
