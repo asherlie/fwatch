@@ -38,7 +38,10 @@ long fsum(char* fn){
       return sum;
 }
 
-void fwatch(char* fn){
+/* notif_func is a function pointer to the routine that should be run
+ * to notify the user about file changes
+ */
+void fwatch(char* fn, void notif_func(char*, char*), char* nfargs[2]){
       int p_s = fsum(fn), s;
       s = p_s;
       while(s == p_s){
@@ -46,6 +49,7 @@ void fwatch(char* fn){
             p_s = s;
             s = fsum(fn);
       }
+      notif_func(nfargs[0], nfargs[1]);
 }
 
 void mail_file(char* fn, char* recp){
@@ -67,9 +71,8 @@ int main(int a, char** b){
       }
       printf("keeping an eye on file: %s\n", dir_p);
       if(fork() != 0)return 0;
-      while(1){
-            fwatch(dir_p);
-            mail_file(dir_p, b[2]);
-      }
+      char* notif_arg[2] = {dir_p, b[2]};
+      while(1)
+            fwatch(dir_p, &mail_file, notif_arg);
       return 0;
 }
