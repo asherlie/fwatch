@@ -20,6 +20,7 @@ TODO:
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <pthread.h>
 
 /* fsz assumes that the fp is at the beginning of the buffer */
 long fsum(char* fn){
