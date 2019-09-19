@@ -1,3 +1,16 @@
+#if 0
+
+fwatch monitors files for changes
+once a change is detected, an email containing the contents
+of the file being monitored is sent
+
+compilation:
+      gcc fwatch.c -Wall -Wextra -Werror -Wpedantic -D_GNU_SOURCE -O3 -o fwatch
+usage:
+      ./fwatch [filename] [email_recipient]
+
+
+#endif
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
