@@ -9,9 +9,11 @@ compilation:
 usage:
       ./fwatch [filename] [email_recipient]
 
+
 TODO:
-      fwatch should immediately spawn a process with a thread accepting socket connections
-      each time a connection is made, OD
+      fwatch should run in the background and accept connections to:
+            {add, remove, list} watch files
+            kill the fwatch process
 #endif
 
 #include <stdio.h>
