@@ -187,7 +187,7 @@ _Bool sock_exists(){
 
 int wait_conn(char* recp){
       /* creating new process and exiting parent */
-      /*if(fork() != 0)return 0;*/
+      if(fork() != 0)return 0;
       int host_sock = socket(AF_UNIX, SOCK_STREAM, 0);
 
       struct sockaddr_un s_inf;
@@ -276,6 +276,7 @@ _Bool sock_open(){
       return 1;
 }
 
+/* TODO: allow adding directories */
 void add_file(char* fname){
       int host_sock = cli_connect();
       int msglen = strlen(fname);
