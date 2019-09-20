@@ -34,6 +34,8 @@ TODO:
 #define MSG_LST_REQ 2
 #define MSG_LST_UPD 3
 
+#define MSG_QUIT 4
+
 /* HOST */
 
 struct fwp_arg{
@@ -146,23 +148,26 @@ void insert_fwpa_cont(struct fwpa_cont* fwpac, struct fwp_arg* node){
 }
 
 void remove_fwpa_cont(struct fwpa_cont* fwpac, struct fwp_arg* node){
-      pthread_mutex_t l = fwpac->fwpa_lock;
-      pthread_mutex_lock(&l);
+      pthread_mutex_lock(&fwpac->fwpa_lock);
       for(int i = 0; i < fwpac->sz; ++i){
             if(fwpac->fwpa_p[i] == node){
-                  printf("shifting by %i\n", fwpac->sz-i-1);
-                  memmove(fwpac->fwpa_p+i, fwpac->fwpa_p+i+1, fwpac->sz-i-1);
+                  /*printf("khifting by %i\nmemmove(fwpa+%i,%i)", fwpac->sz-i-1, i+1, fwpac->sz-i-1);*/
+                  memmove(fwpac->fwpa_p+i, fwpac->fwpa_p+i+1, sizeof(struct fwp_arg*)*fwpac->sz-i-1);
+
+                  /*
+                   *[x] -> []
+                   *memmove(0, 1, 1-0-1
+                   *m
+                   */
 
                   *node->active = 0;
-                  pthread_join(node->pth, NULL);
 
                   free(node);
 
                   --fwpac->sz;
             }
       }
-      pthread_mutex_unlock(&l);
-      pthread_mutex_destroy(&l);
+      pthread_mutex_unlock(&fwpac->fwpa_lock);
 }
 
 void send_file_inf(struct fwpa_cont* fwpac, int sock){
@@ -201,7 +206,6 @@ int wait_conn(char* recp){
             switch(msg_type){
                   case MSG_ADD:{
                         struct fwp_arg* fwpa = malloc(sizeof(struct fwp_arg));
-                        /*fwpa->cli_sock = cli_sock;*/
 
                         insert_fwpa_cont(&watched_files, fwpa);
 
@@ -214,11 +218,21 @@ int wait_conn(char* recp){
 
                         pthread_t pth;
                         strcpy(fwpa->recp, recp);
+
                         pthread_create(&pth, NULL, &fwatch_pth, fwpa);
+                        pthread_detach(pth);
+
                         break;
                         }
                   case MSG_LST_REQ:
                         send_file_inf(&watched_files, cli_sock);
+                        /* TODO can we close the socket here? */
+                        break;
+                  case MSG_QUIT:
+                        while(watched_files.sz)remove_fwpa_cont(&watched_files, *watched_files.fwpa_p);
+                        free(watched_files.fwpa_p);
+                        pthread_mutex_destroy(&watched_files.fwpa_lock);
+                        exit(EXIT_SUCCESS);
                         break;
             }
       }
@@ -263,6 +277,11 @@ _Bool list_files(){
       return 0;
 }
 
+void quit(){
+      int host_sock = cli_connect();
+      send_header(host_sock, MSG_QUIT, 0);
+}
+
 /* CLIENT END */
 
 int main(int a, char** b){
@@ -278,6 +297,9 @@ int main(int a, char** b){
                         break;
                   case 'l':
                         list_files();
+                        break;
+                  case 'q':
+                        quit();
             }
             /* client mode */
             return 0;
