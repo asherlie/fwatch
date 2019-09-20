@@ -25,6 +25,7 @@ TODO:
 #include <pthread.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <sys/stat.h>
 
 #define SOCK_FILE "/var/tmp/fwatch_sock.decaf"
 
@@ -178,6 +179,11 @@ void send_file_inf(struct fwpa_cont* fwpac, int sock){
       pthread_mutex_unlock(&fwpac->fwpa_lock);
 }
 
+_Bool sock_exists(){
+      struct stat st;
+      return stat(SOCK_FILE, &st) != -1;
+}
+
 int wait_conn(char* recp){
       /* creating new process and exiting parent */
       /*if(fork() != 0)return 0;*/
@@ -186,6 +192,8 @@ int wait_conn(char* recp){
       struct sockaddr_un s_inf;
       s_inf.sun_family = AF_UNIX;
       strcpy(s_inf.sun_path, SOCK_FILE);
+
+      if(sock_exists())remove(SOCK_FILE);
 
       bind(host_sock, (struct sockaddr*)&s_inf, sizeof(struct sockaddr_un));
       listen(host_sock, 0);
@@ -238,6 +246,7 @@ int wait_conn(char* recp){
                         while(watched_files.sz)remove_fwpa_cont(&watched_files, *watched_files.fwpa_p);
                         free(watched_files.fwpa_p);
                         pthread_mutex_destroy(&watched_files.fwpa_lock);
+                        close(host_sock);
                         remove(SOCK_FILE);
                         exit(EXIT_SUCCESS);
                         break;
@@ -256,10 +265,18 @@ int cli_connect(){
       host_addr.sun_family = AF_UNIX;
       strcpy(host_addr.sun_path, SOCK_FILE);
       if(connect(conn_sock, (struct sockaddr*)&host_addr, sizeof(struct sockaddr_un)) == -1){
-            close(conn_sock);
+            /*close(conn_sock);*/
             return -1;
       }
       return conn_sock;
+}
+
+_Bool sock_open(){
+      /* i_connect returns -1 if it cannot connect to sock */
+      int sock = cli_connect();
+      if(sock == -1)return 0;
+      close(sock);
+      return 1;
 }
 
 void add_file(char* fname){
@@ -287,14 +304,6 @@ _Bool list_files(){
       return 0;
 }
 
-_Bool sock_exists(){
-      /* i_connect returns -1 if it cannot connect to sock */
-      int sock = cli_connect();
-      if(sock == -1)return 0;
-      close(sock);
-      return 1;
-}
-
 void quit(){
       int host_sock = cli_connect();
       send_header(host_sock, MSG_QUIT, 0);
@@ -304,6 +313,10 @@ void quit(){
 
 int main(int a, char** b){
       if(a == 2){
+            if(sock_exists() && sock_open()){
+                  printf("an instance of %s is already running. refusing to start\n", *b);
+                  return 0;
+            }
             init_fwpa_cont(&watched_files);
             wait_conn(b[1]);
             return 0;
