@@ -187,8 +187,6 @@ int wait_conn(char* recp){
       s_inf.sun_family = AF_UNIX;
       strcpy(s_inf.sun_path, SOCK_FILE);
 
-      remove(SOCK_FILE);
-
       bind(host_sock, (struct sockaddr*)&s_inf, sizeof(struct sockaddr_un));
       listen(host_sock, 0);
 
@@ -224,6 +222,14 @@ int wait_conn(char* recp){
 
                         break;
                         }
+                  case MSG_REM:{
+                        int rm_ind;
+                        read(cli_sock, &rm_ind, sizeof(int));
+                        /* TODO: this if statement introduces possible synch issues */
+                        if(rm_ind < watched_files.sz)
+                              remove_fwpa_cont(&watched_files, watched_files.fwpa_p[rm_ind]);
+                        }
+                        break;
                   case MSG_LST_REQ:
                         send_file_inf(&watched_files, cli_sock);
                         /* TODO can we close the socket here? */
@@ -232,6 +238,7 @@ int wait_conn(char* recp){
                         while(watched_files.sz)remove_fwpa_cont(&watched_files, *watched_files.fwpa_p);
                         free(watched_files.fwpa_p);
                         pthread_mutex_destroy(&watched_files.fwpa_lock);
+                        remove(SOCK_FILE);
                         exit(EXIT_SUCCESS);
                         break;
             }
@@ -248,7 +255,10 @@ int cli_connect(){
       struct sockaddr_un host_addr;
       host_addr.sun_family = AF_UNIX;
       strcpy(host_addr.sun_path, SOCK_FILE);
-      connect(conn_sock, (struct sockaddr*)&host_addr, sizeof(struct sockaddr_un));
+      if(connect(conn_sock, (struct sockaddr*)&host_addr, sizeof(struct sockaddr_un)) == -1){
+            close(conn_sock);
+            return -1;
+      }
       return conn_sock;
 }
 
@@ -275,6 +285,14 @@ _Bool list_files(){
             printf("%i): \"%s\"\n", i, fn);
       }
       return 0;
+}
+
+_Bool sock_exists(){
+      /* i_connect returns -1 if it cannot connect to sock */
+      int sock = cli_connect();
+      if(sock == -1)return 0;
+      close(sock);
+      return 1;
 }
 
 void quit(){
