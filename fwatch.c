@@ -311,30 +311,34 @@ void quit(){
 
 /* CLIENT END */
 
+void p_usage(char* bin_name){
+      printf("usage: %s\n", bin_name);
+}
+
 int main(int a, char** b){
       if(a == 2){
-            if(sock_exists() && sock_open()){
-                  printf("an instance of %s is already running. refusing to start\n", *b);
-                  return 0;
-            }
-            init_fwpa_cont(&watched_files);
-            wait_conn(b[1]);
-            return 0;
-      }
-      if(a > 2){
             switch(*b[1]){
-                  case 'a':
-                        add_file(b[2]);
-                        break;
                   case 'l':
                         list_files();
-                        break;
+                        return 0;
                   case 'q':
                         quit();
+                        return 0;
+                  default:
+                        if(sock_exists() && sock_open()){
+                              printf("an instance of %s is already running. refusing to start\n", *b);
+                              return 0;
+                        }
+                        init_fwpa_cont(&watched_files);
+                        wait_conn(b[1]);
+                        return 0;
             }
-            /* client mode */
+      }
+      if(a > 2 && *b[1] == 'a'){
+            add_file(b[2]);
             return 0;
       }
-      /*printf("usage: %s ")*/
+            /* client mode */
+      p_usage(*b);
       return 1;
 }
