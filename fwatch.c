@@ -12,10 +12,6 @@ usage:
 NOTE:
       make sure that postfix has been started before running this
 
-TODO:
-      fwatch should run in the background and accept connections to:
-            {add, remove, list} watch files
-            kill the fwatch process
 #endif
 
 #include <stdio.h>
@@ -36,6 +32,14 @@ TODO:
 #define MSG_LST_UPD 3
 
 #define MSG_QUIT 4
+
+_Bool strtoi(const char* str, int* i){
+      char* res;
+      unsigned int r = strtol(str, &res, 10);
+      if(*res)return 0;
+      if(i)*i = (int)r;
+      return 1;
+}
 
 /* HOST */
 
@@ -148,19 +152,16 @@ void insert_fwpa_cont(struct fwpa_cont* fwpac, struct fwp_arg* node){
       pthread_mutex_unlock(&fwpac->fwpa_lock);
 }
 
+void p_fwpac(struct fwpa_cont* fp){
+      for(int i = 0;i  < fp->sz; ++i){
+            puts(fp->fwpa_p[i]->fn);
+      }
+}
 void remove_fwpa_cont(struct fwpa_cont* fwpac, struct fwp_arg* node){
       pthread_mutex_lock(&fwpac->fwpa_lock);
       for(int i = 0; i < fwpac->sz; ++i){
             if(fwpac->fwpa_p[i] == node){
-                  /*printf("khifting by %i\nmemmove(fwpa+%i,%i)", fwpac->sz-i-1, i+1, fwpac->sz-i-1);*/
                   memmove(fwpac->fwpa_p+i, fwpac->fwpa_p+i+1, sizeof(struct fwp_arg*)*fwpac->sz-i-1);
-
-                  /*
-                   *[x] -> []
-                   *memmove(0, 1, 1-0-1
-                   *m
-                   */
-
                   *node->active = 0;
 
                   free(node);
@@ -201,10 +202,6 @@ int wait_conn(char* recp){
       int cli_sock, msg_type, msglen;
       while(1){
             cli_sock = accept(host_sock, NULL, NULL);
-            /* TODO: keep track of pthread_t, cli_sock in a structure
-             * this structure should also store the fwp_arg
-             * for printing purposes
-             */
             /* before we can spawn the watch thread we need to receive filename
              */
             read_header(cli_sock, &msg_type, &msglen);
@@ -286,6 +283,12 @@ void add_file(char* fname){
       send(host_sock, fname, sizeof(char)*msglen, 0);
 }
 
+void rm_file(int f_ind){
+      int host_sock = cli_connect();
+      send_header(host_sock, MSG_REM, 0);
+      send(host_sock, &f_ind, sizeof(int), 0);
+}
+
 _Bool list_files(){
       int host_sock = cli_connect(), mtype, len;
       send_header(host_sock, MSG_LST_REQ, 0);
@@ -334,11 +337,19 @@ int main(int a, char** b){
                         return 0;
             }
       }
-      if(a > 2 && *b[1] == 'a'){
-            add_file(b[2]);
-            return 0;
+      if(a > 2){
+            switch(*b[1]){
+                  case 'a':
+                        add_file(b[2]);
+                        return 0;
+                  case 'r':{
+                        int rm_ind;
+                        if(strtoi(b[2], &rm_ind))
+                        rm_file(rm_ind);
+                        return 0;
+                  }
+            }
       }
-            /* client mode */
       p_usage(*b);
       return 1;
 }
