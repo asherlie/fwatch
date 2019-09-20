@@ -30,8 +30,9 @@ TODO:
 
 #define MSG_ADD 0
 #define MSG_REM 1
-#define MSG_LST 2
-#define MSG_UPD 3
+
+#define MSG_LST_REQ 2
+#define MSG_LST_UPD 3
 
 /* HOST */
 
@@ -75,9 +76,13 @@ void mail_file(char* fn, char* recp){
 }
 
 struct fwp_arg{
+      /* we can likely get rid of recp */
       char fn[100], recp[100];
       _Bool* active;
       void* notif_func;
+
+      /* this entry is used __ */
+      pthread_t pth;
 };
 
 void* fwatch_pth(void* fwpa_v){
@@ -98,6 +103,53 @@ void* fwatch_pth(void* fwpa_v){
 void read_header(int sock, int* msg, int* msglen){
       read(sock, msg, sizeof(int));
       read(sock, msglen, sizeof(int));
+}
+
+/* this is used to keep track of file watches in place */
+struct fwpa_cont{
+      pthread_mutex_t fwpa_lock;
+
+      struct fwp_arg** fwpa_p;
+      int sz, cap;
+};
+
+void init_fwpa_cont(struct fwpa_cont* fwpac){
+      pthread_mutex_init(&fwpac->fwpa_lock, NULL);
+
+      fwpac->cap = 20;
+      fwpac->sz = 0;
+
+      fwpac->fwpa_p = malloc(sizeof(struct fwp_arg*)*fwpac->cap);
+}
+
+void insert_fwpa_cont(struct fwpa_cont* fwpac, struct fwp_arg* node){
+      if(fwpac->sz == fwpac->cap){
+            fwpac->cap *= 2;
+            struct fwp_arg** tmp = malloc(sizeof(struct fwp_arg*)*fwpac->cap);
+            memcpy(tmp, fwpac->fwpa_p, sizeof(struct fwp_arg*)*fwpac->cap);
+            free(fwpac->fwpa_p);
+            fwpac->fwpa_p = tmp;
+      }
+      fwpac->fwpa_p[fwpac->sz++] = node;
+}
+
+void remove_fwpa_cont(struct fwpa_cont* fwpac, struct fwp_arg* node){
+      for(int i = 0; i < fwpac->sz; ++i){
+            if(fwpac->fwpa_p[i] == node){
+                  printf("shifting by %i\n", fwpac->sz-i-1);
+                  memmove(fwpac->fwpa_p+i, fwpac->fwpa_p+i+1, fwpac->sz-i-1);
+
+                  *node->active = 0;
+                  pthread_join(node->pth, NULL);
+
+                  free(node);
+
+                  --fwpac->sz;
+            }
+      }
+}
+
+void send_file_inf(){
 }
 
 int wait_conn(char* recp){
@@ -133,10 +185,14 @@ int wait_conn(char* recp){
                         *fwpa->active = 1;
 
                         read(cli_sock, &fwpa->fn, msglen);
+
+                        close(cli_sock);
+
                         pthread_t pth;
                         strcpy(fwpa->recp, recp);
                         pthread_create(&pth, NULL, &fwatch_pth, fwpa);
                         }
+                  /*case MSG_LST_REQ:*/
             }
       }
       return 0;
@@ -165,6 +221,11 @@ void add_file(char* fname){
       int msglen = strlen(fname);
       send_header(host_sock, MSG_ADD, sizeof(char)*msglen);
       send(host_sock, fname, sizeof(char)*msglen, 0);
+}
+
+void list_files(){
+      int host_sock = cli_connect();
+      send_header(host_sock, MSG_LST_REQ, 0);
 }
 
 /* CLIENT END */
