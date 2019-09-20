@@ -9,6 +9,8 @@ compilation:
 usage:
       ./fwatch [filename] [email_recipient]
 
+NOTE:
+      make sure that postfix has been started before running this
 
 TODO:
       fwatch should run in the background and accept connections to:
@@ -63,8 +65,8 @@ void fwatch(char* fn, _Bool* run, void notif_func(char*, char*), char* nfargs[2]
 }
 
 void mail_file(char* fn, char* recp){
-      char cmd[150] = "mail -s [AUTO_NOTE_UPDATE] ";
-      stpcpy(stpcpy(stpcpy(cmd+strlen(cmd), recp), " < "), fn);
+      char cmd[150] = "mail -s [AUTO_NOTE_UPDATE@";
+      stpcpy(stpcpy(stpcpy(stpcpy(stpcpy(cmd+strlen(cmd), fn), "] "), recp), " < "), fn);
       /* give some time for the FP to be closed */
       usleep(10000);
       system(cmd);
@@ -112,9 +114,7 @@ int wait_conn(char* recp){
 
       int cli_sock, msg_type, msglen;
       while(1){
-      puts("GOT HER");
             cli_sock = accept(host_sock, NULL, NULL);
-            puts("RECVD MESSAGE");
             /* TODO: keep track of pthread_t, cli_sock in a structure
              * this structure should also store the fwp_arg
              * for printing purposes
@@ -122,18 +122,18 @@ int wait_conn(char* recp){
             /* before we can spawn the watch thread we need to receive filename
              */
             read_header(cli_sock, &msg_type, &msglen);
-            printf("%i %i\n", msg_type, msglen);
 
             switch(msg_type){
                   case MSG_ADD:{
-                        printf("recvd msg: %i, %i\n", msg_type, msglen);
                         struct fwp_arg* fwpa = malloc(sizeof(struct fwp_arg));
 
+                        fwpa->active = malloc(sizeof(_Bool));
+                        *fwpa->active = 1;
+
                         read(cli_sock, &fwpa->fn, msglen);
-                        printf("read fn: %s\n", fwpa->fn);
                         pthread_t pth;
                         strcpy(fwpa->recp, recp);
-                        pthread_create(&pth, NULL, &fwatch_pth, &fwpa);
+                        pthread_create(&pth, NULL, &fwatch_pth, fwpa);
                         }
             }
       }
@@ -154,15 +154,12 @@ int cli_connect(){
 }
 
 void send_header(int sock, int msg, int msglen){
-      printf("sending %i %i\n", sock, *(&msglen));
       send(sock, &msg, sizeof(int), 0);
-      perror("SEND");
       send(sock, &msglen, sizeof(int), 0);
 }
 
 void add_file(char* fname){
       int host_sock = cli_connect();
-      printf("host sock %i\n", host_sock);
       int msglen = strlen(fname);
       send_header(host_sock, MSG_ADD, sizeof(char)*msglen);
       send(host_sock, fname, sizeof(char)*msglen, 0);
@@ -187,3 +184,4 @@ int main(int a, char** b){
       /*printf("usage: %s ")*/
       return 1;
 }
+this is cool
