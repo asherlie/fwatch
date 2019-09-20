@@ -43,6 +43,8 @@ struct fwp_arg{
       void* notif_func;
 
       /* this entry is used __ */
+      /* cli_sock is used in MSG_LST_UPD */
+      /*int cli_sock;*/
       pthread_t pth;
 };
 
@@ -158,11 +160,14 @@ void remove_fwpa_cont(struct fwpa_cont* fwpac, struct fwp_arg* node){
       pthread_mutex_destroy(&l);
 }
 
-void send_file_inf(struct fwpa_cont* fwpac){
+void send_file_inf(struct fwpa_cont* fwpac, int sock){
       puts("printing fwpac");
+      pthread_mutex_lock(&fwpac->fwpa_lock);
       for(int i = 0; i < fwpac->sz; ++i){
             puts(fwpac->fwpa_p[i]->fn);
+            send(sock, fwpac->fwpa_p[i]->fn, 100, 0);
       }
+      pthread_mutex_unlock(&fwpac->fwpa_lock);
 }
 
 int wait_conn(char* recp){
@@ -193,6 +198,7 @@ int wait_conn(char* recp){
             switch(msg_type){
                   case MSG_ADD:{
                         struct fwp_arg* fwpa = malloc(sizeof(struct fwp_arg));
+                        /*fwpa->cli_sock = cli_sock;*/
 
                         insert_fwpa_cont(&watched_files, fwpa);
 
@@ -209,7 +215,7 @@ int wait_conn(char* recp){
                         break;
                         }
                   case MSG_LST_REQ:
-                        send_file_inf(&watched_files);
+                        send_file_inf(&watched_files, cli_sock);
                         break;
             }
       }
@@ -241,9 +247,22 @@ void add_file(char* fname){
       send(host_sock, fname, sizeof(char)*msglen, 0);
 }
 
-void list_files(){
-      int host_sock = cli_connect();
+_Bool list_files(){
+      int host_sock = cli_connect(), mtype, len;
       send_header(host_sock, MSG_LST_REQ, 0);
+
+      read_header(host_sock, &mtype, &len);
+      if(mtype != MSG_LST_UPD)return 0;
+
+      /* read fnames one at a time */
+      
+      char fn[100];
+      for(int i = 0; i < len; ++i){
+            memset(fn, 0, sizeof(char)*100);
+            read(host_sock, fn, sizeof(char)*100);
+            printf("%i): \"%s\"\n", i, fn);
+      }
+      return 0;
 }
 
 /* CLIENT END */
