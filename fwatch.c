@@ -30,6 +30,8 @@ TODO:
 
 #define MSG_ADD 0
 #define MSG_REM 1
+#define MSG_LST 2
+#define MSG_UPD 3
 
 /* HOST */
 
@@ -184,4 +186,3 @@ int main(int a, char** b){
       /*printf("usage: %s ")*/
       return 1;
 }
-this is cool
