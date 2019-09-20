@@ -113,6 +113,11 @@ void* fwatch_pth(void* fwpa_v){
       return NULL;
 }
 
+void send_header(int sock, int msg, int msglen){
+      send(sock, &msg, sizeof(int), 0);
+      send(sock, &msglen, sizeof(int), 0);
+}
+
 void read_header(int sock, int* msg, int* msglen){
       read(sock, msg, sizeof(int));
       read(sock, msglen, sizeof(int));
@@ -161,12 +166,10 @@ void remove_fwpa_cont(struct fwpa_cont* fwpac, struct fwp_arg* node){
 }
 
 void send_file_inf(struct fwpa_cont* fwpac, int sock){
-      puts("printing fwpac");
       pthread_mutex_lock(&fwpac->fwpa_lock);
-      for(int i = 0; i < fwpac->sz; ++i){
-            puts(fwpac->fwpa_p[i]->fn);
+      send_header(sock, MSG_LST_UPD, fwpac->sz);
+      for(int i = 0; i < fwpac->sz; ++i)
             send(sock, fwpac->fwpa_p[i]->fn, 100, 0);
-      }
       pthread_mutex_unlock(&fwpac->fwpa_lock);
 }
 
@@ -233,11 +236,6 @@ int cli_connect(){
       strcpy(host_addr.sun_path, SOCK_FILE);
       connect(conn_sock, (struct sockaddr*)&host_addr, sizeof(struct sockaddr_un));
       return conn_sock;
-}
-
-void send_header(int sock, int msg, int msglen){
-      send(sock, &msg, sizeof(int), 0);
-      send(sock, &msglen, sizeof(int), 0);
 }
 
 void add_file(char* fname){
