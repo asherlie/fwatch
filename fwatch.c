@@ -36,6 +36,26 @@ TODO:
 
 /* HOST */
 
+struct fwp_arg{
+      /* we can likely get rid of recp */
+      char fn[100], recp[100];
+      _Bool* active;
+      void* notif_func;
+
+      /* this entry is used __ */
+      pthread_t pth;
+};
+
+/* this is used to keep track of file watches in place */
+struct fwpa_cont{
+      pthread_mutex_t fwpa_lock;
+
+      struct fwp_arg** fwpa_p;
+      int sz, cap;
+};
+
+struct fwpa_cont watched_files;
+
 /* fsz assumes that the fp is at the beginning of the buffer */
 long fsum(char* fn){
       FILE* fp = fopen(fn, "r");
@@ -75,16 +95,6 @@ void mail_file(char* fn, char* recp){
       system(cmd);
 }
 
-struct fwp_arg{
-      /* we can likely get rid of recp */
-      char fn[100], recp[100];
-      _Bool* active;
-      void* notif_func;
-
-      /* this entry is used __ */
-      pthread_t pth;
-};
-
 void* fwatch_pth(void* fwpa_v){
       struct fwp_arg* fwpa = (struct fwp_arg*)fwpa_v;
       char dir[100] = {0};
@@ -95,6 +105,7 @@ void* fwatch_pth(void* fwpa_v){
             sprintf(dir+strlen(dir), "/");
             strcpy(dir+strlen(dir), fwpa->fn);
       }
+      strcpy(fwpa->fn, dir_p);
       while(*fwpa->active)
             fwatch(dir_p, fwpa->active, &mail_file, nfargs);
       return NULL;
@@ -104,14 +115,6 @@ void read_header(int sock, int* msg, int* msglen){
       read(sock, msg, sizeof(int));
       read(sock, msglen, sizeof(int));
 }
-
-/* this is used to keep track of file watches in place */
-struct fwpa_cont{
-      pthread_mutex_t fwpa_lock;
-
-      struct fwp_arg** fwpa_p;
-      int sz, cap;
-};
 
 void init_fwpa_cont(struct fwpa_cont* fwpac){
       pthread_mutex_init(&fwpac->fwpa_lock, NULL);
@@ -123,6 +126,7 @@ void init_fwpa_cont(struct fwpa_cont* fwpac){
 }
 
 void insert_fwpa_cont(struct fwpa_cont* fwpac, struct fwp_arg* node){
+      pthread_mutex_lock(&fwpac->fwpa_lock);
       if(fwpac->sz == fwpac->cap){
             fwpac->cap *= 2;
             struct fwp_arg** tmp = malloc(sizeof(struct fwp_arg*)*fwpac->cap);
@@ -131,9 +135,12 @@ void insert_fwpa_cont(struct fwpa_cont* fwpac, struct fwp_arg* node){
             fwpac->fwpa_p = tmp;
       }
       fwpac->fwpa_p[fwpac->sz++] = node;
+      pthread_mutex_unlock(&fwpac->fwpa_lock);
 }
 
 void remove_fwpa_cont(struct fwpa_cont* fwpac, struct fwp_arg* node){
+      pthread_mutex_t l = fwpac->fwpa_lock;
+      pthread_mutex_lock(&l);
       for(int i = 0; i < fwpac->sz; ++i){
             if(fwpac->fwpa_p[i] == node){
                   printf("shifting by %i\n", fwpac->sz-i-1);
@@ -147,9 +154,15 @@ void remove_fwpa_cont(struct fwpa_cont* fwpac, struct fwp_arg* node){
                   --fwpac->sz;
             }
       }
+      pthread_mutex_unlock(&l);
+      pthread_mutex_destroy(&l);
 }
 
-void send_file_inf(){
+void send_file_inf(struct fwpa_cont* fwpac){
+      puts("printing fwpac");
+      for(int i = 0; i < fwpac->sz; ++i){
+            puts(fwpac->fwpa_p[i]->fn);
+      }
 }
 
 int wait_conn(char* recp){
@@ -181,6 +194,8 @@ int wait_conn(char* recp){
                   case MSG_ADD:{
                         struct fwp_arg* fwpa = malloc(sizeof(struct fwp_arg));
 
+                        insert_fwpa_cont(&watched_files, fwpa);
+
                         fwpa->active = malloc(sizeof(_Bool));
                         *fwpa->active = 1;
 
@@ -191,8 +206,11 @@ int wait_conn(char* recp){
                         pthread_t pth;
                         strcpy(fwpa->recp, recp);
                         pthread_create(&pth, NULL, &fwatch_pth, fwpa);
+                        break;
                         }
-                  /*case MSG_LST_REQ:*/
+                  case MSG_LST_REQ:
+                        send_file_inf(&watched_files);
+                        break;
             }
       }
       return 0;
@@ -232,6 +250,7 @@ void list_files(){
 
 int main(int a, char** b){
       if(a == 2){
+            init_fwpa_cont(&watched_files);
             wait_conn(b[1]);
             return 0;
       }
@@ -240,6 +259,8 @@ int main(int a, char** b){
                   case 'a':
                         add_file(b[2]);
                         break;
+                  case 'l':
+                        list_files();
             }
             /* client mode */
             return 0;
